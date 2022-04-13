@@ -7,7 +7,7 @@ enum LogType {
     SSHD(SSHDLog),
 }
 
-fn parse_stdin<R>(mut reader: R) -> ()
+fn parse_stdin<R>(mut reader: R)
 where
     R: BufRead,
 {
@@ -30,11 +30,10 @@ where
                             _ => panic!(),
                         },
                     };
-                    println!("{:?}", log);
+                    // println!("id: {}, timestamp: {:?}", log.get_id(), log.get_timestamp())
                 }
-                println!("Read {} bytes", bytes_read);
             }
-            Err(_) => return (),
+            Err(_) => return,
         }
         str_buffer = String::new();
     }
@@ -42,9 +41,8 @@ where
 
 fn main() {
     let stdin = io::stdin();
-    let input = stdin.lock();
 
-    parse_stdin(input);
+    parse_stdin(stdin.lock());
 }
 
 #[cfg(test)]

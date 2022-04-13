@@ -3,13 +3,23 @@ extern crate regex;
 use chrono::prelude::*;
 use regex::Regex;
 use std::net::IpAddr;
+use lazy_static::lazy_static;
 
 const REGEX_STR: &'static str =
     r"^\w{3}\s\d{1,2}\s\d{2}:\d{2}:\d{2}\s[\w\d]+\s[\w\-_]+\[\d+\]:\s.*\n?$";
 const DATE_REGEX_STR: &'static str = r"^\w{3}\s\d{1,2}\s\d{2}:\d{2}:\d{2}";
 const HOSTNAME_REGEX_STR: &'static str = r"^\w{3}\s\d{1,2}\s\d{2}:\d{2}:\d{2}\s([\w\d]+)";
-const LOG_ID_REGEX: &'static str = r"\w+\[(\d+)\]";
-const USERNAME_REGEX: &'static str = r"user ([\w\d]+)";
+const LOG_ID_REGEX_STR: &'static str = r"\w+\[(\d+)\]";
+const USERNAME_REGEX_STR: &'static str = r"user ([\w\d]+)";
+
+lazy_static! {
+    static ref LOG_REGEX: Regex = Regex::new(REGEX_STR).unwrap();
+    static ref DATE_REGEX: Regex = Regex::new(DATE_REGEX_STR).unwrap();
+    static ref HOSTNAME_REGEX: Regex = Regex::new(HOSTNAME_REGEX_STR).unwrap();
+    static ref LOG_ID_REGEX: Regex = Regex::new(LOG_ID_REGEX_STR).unwrap();
+    static ref USERNAME_REGEX: Regex = Regex::new(USERNAME_REGEX_STR).unwrap();
+}
+
 
 #[derive(Debug, PartialEq)]
 pub enum SSHDLogError {
@@ -20,17 +30,11 @@ pub enum SSHDLogError {
     IdParseError,
     IpAddressParseError,
     PortParseError,
-    SomeOtherError(String),
     Unknown,
 }
 
 fn parse_date(input: &str) -> Result<NaiveDateTime, SSHDLogError> {
-    let date_regex = match Regex::new(DATE_REGEX_STR) {
-        Ok(v) => v,
-        Err(_) => return Err(SSHDLogError::TimeParseError),
-    };
-
-    let date_match = match date_regex.find(input) {
+let date_match = match DATE_REGEX.find(input) {
         Some(v) => v.as_str(),
         None => return Err(SSHDLogError::TimeParseError),
     };
@@ -44,12 +48,7 @@ fn parse_date(input: &str) -> Result<NaiveDateTime, SSHDLogError> {
 }
 
 fn parse_host_name(input: &str) -> Result<String, SSHDLogError> {
-    let hostname_regex = match Regex::new(HOSTNAME_REGEX_STR) {
-        Ok(v) => v,
-        Err(_) => return Err(SSHDLogError::HostnameParseError),
-    };
-
-    Ok(match hostname_regex.captures(input) {
+    Ok(match HOSTNAME_REGEX.captures(input) {
         Some(v) => match v.get(1) {
             Some(val) => val.as_str(),
             None => {
@@ -64,12 +63,7 @@ fn parse_host_name(input: &str) -> Result<String, SSHDLogError> {
 }
 
 fn parse_log_id(input: &str) -> Result<i64, SSHDLogError> {
-    let id_regex = match Regex::new(LOG_ID_REGEX) {
-        Ok(v) => v,
-        Err(_) => return Err(SSHDLogError::IdParseError),
-    };
-
-    let res = match id_regex.captures(input) {
+    let res = match LOG_ID_REGEX.captures(input) {
         Some(v) => match v.get(1) {
             Some(val) => match val.as_str().parse::<i64>() {
                 Ok(res) => res,
@@ -87,12 +81,7 @@ fn parse_log_id(input: &str) -> Result<i64, SSHDLogError> {
 }
 
 fn parse_username(input: &str) -> Result<Option<String>, SSHDLogError> {
-    let username_regex = match Regex::new(USERNAME_REGEX) {
-        Ok(v) => v,
-        Err(_) => return Err(SSHDLogError::UsernameParseError),
-    };
-
-    return match username_regex.captures(input) {
+return match USERNAME_REGEX.captures(input) {
         Some(v) => match v.get(1) {
             Some(val) => Ok(Some(val.as_str().to_owned())),
             None => Ok(None),
@@ -121,13 +110,7 @@ pub struct SSHDLog {
 
 impl SSHDLog {
     pub fn new(input: &str) -> Result<SSHDLog, SSHDLogError> {
-        let log_parse_regex = match Regex::new(REGEX_STR) {
-            Ok(v) => v,
-            Err(_) => {
-                return Err(SSHDLogError::Unknown);
-            }
-        };
-        if !log_parse_regex.is_match(input) {
+        if !LOG_REGEX.is_match(input) {
             return Err(SSHDLogError::LogParseError);
         };
 
@@ -140,10 +123,18 @@ impl SSHDLog {
             remote_port: parse_port(input)?,
         });
     }
+
+    pub fn get_timestamp(&self) -> &NaiveDateTime {
+        return &self.log_timestamp;
+    }
+
+    pub fn get_id(&self) -> &i64 {
+        return &self.id;
+    }
 }
 
 #[cfg(test)]
-mod tests {
+mod sshd_tests {
     use super::*;
     use chrono::RoundingError::TimestampExceedsLimit;
 
