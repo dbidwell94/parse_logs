@@ -7,22 +7,23 @@ mod utils;
 use chrono::prelude::*;
 use consts::*;
 pub use enums::{SSHDLogError, SSHDLogType};
+use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use utils::{
     parse_date, parse_host_name, parse_ip_address, parse_log_id, parse_port, parse_username,
 };
 
-#[derive(PartialEq, Debug)]
-pub struct SSHDLog {
-    id: i64,
-    log_timestamp: NaiveDateTime,
-    host_name: String,
-    username: Option<String>,
-    remote_address: Option<IpAddr>,
-    remote_port: Option<u16>,
-}
-
 impl SSHDLog {
+    /// Instantiate a new instance of an SSHDLog struct
+    /// # Arguments
+    /// * `input` - A string ending in a \n
+    /// # Examples
+    /// ```
+    /// use parse_logs::SSHDLog;
+    /// let input_str = "Apr 11 14:11:00 someserver sshd[2567574]: Received disconnect from 192.168.1.1 port 36614:11: Bye Bye [preauth]";
+    /// let log = SSHDLog::new(input_str);
+    /// assert_ne!(log, Err(SSHDLogError));
+    /// ```
     pub fn new(input: &str) -> Result<SSHDLog, SSHDLogError> {
         if !LOG_REGEX.is_match(input) {
             return Err(SSHDLogError::LogParseError);
@@ -35,16 +36,41 @@ impl SSHDLog {
             id: parse_log_id(input)?,
             remote_address: parse_ip_address(input)?,
             remote_port: parse_port(input)?,
+            log_type: SSHDLogType::ConnectionClosed,
         });
     }
 
+    /// Gets the NaiveDateTime timestamp for this struct
+    ///
+    /// # Returns
+    /// * `&chrono::NaiveDateTime`
     pub fn get_timestamp(&self) -> &NaiveDateTime {
         return &self.log_timestamp;
     }
 
+    /// Gets the log ID for this struct
+    ///
+    /// # Returns
+    /// * `&std::i64`
     pub fn get_id(&self) -> &i64 {
         return &self.id;
     }
+
+    pub fn get_ip_addr(&self) -> Option<IpAddr> {
+        return self.remote_address.to_owned();
+    }
+}
+
+#[derive(PartialEq, Debug, Serialize, Deserialize)]
+/// A struct representation of an SSHD log line
+pub struct SSHDLog {
+    id: i64,
+    log_timestamp: NaiveDateTime,
+    host_name: String,
+    username: Option<String>,
+    remote_address: Option<IpAddr>,
+    remote_port: Option<u16>,
+    log_type: SSHDLogType,
 }
 
 #[cfg(test)]
@@ -142,11 +168,11 @@ mod sshd_tests {
             TEST_PORT,
         ]))
         .unwrap();
-        let test_date_string = String::from("70 ") + TEST_TIME;
+        let test_date_string = String::from(Utc::now().year().to_string()) + " " + TEST_TIME;
 
         assert_eq!(
             log.log_timestamp,
-            NaiveDateTime::parse_from_str(&test_date_string, "%-y %b %d %X").unwrap()
+            NaiveDateTime::parse_from_str(&test_date_string, "%Y %b %d %X").unwrap()
         );
     }
 

@@ -1,5 +1,6 @@
 use super::consts::*;
 use super::enums::SSHDLogError;
+use crate::ssh_log::SSHDLogType;
 use chrono::prelude::*;
 use regex::Captures;
 use std::net::IpAddr;
@@ -10,9 +11,11 @@ pub fn parse_date(input: &str) -> Result<NaiveDateTime, SSHDLogError> {
         None => return Err(SSHDLogError::TimeParseError),
     };
 
-    let date_with_fake_year = String::from("70 ") + date_match;
+    let today = Utc::now();
 
-    match NaiveDateTime::parse_from_str(&date_with_fake_year, "%-y %b %d %X") {
+    let date_with_fake_year = String::from(today.year().to_string()) + " " + date_match;
+
+    match NaiveDateTime::parse_from_str(&date_with_fake_year, "%Y %b %d %X") {
         Ok(v) => Ok(v),
         Err(_) => Err(SSHDLogError::TimeParseError),
     }
@@ -96,5 +99,13 @@ pub fn parse_port(input: &str) -> Result<Option<u16>, SSHDLogError> {
             None => Err(SSHDLogError::PortParseError),
         },
         None => Ok(None),
+    };
+}
+
+pub fn parse_log_type(input: &str) -> Result<SSHDLogType, SSHDLogError> {
+    return match input {
+        s if INVALID_PASSWORD_REGEX.is_match(s) => Ok(SSHDLogType::InvalidPassword),
+        s if INVALID_PASSWORD_REGEX.is_match(s) => Ok(SSHDLogType::InvalidUser),
+        _ => Err(SSHDLogError::LogParseError),
     };
 }
