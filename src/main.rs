@@ -30,7 +30,7 @@ where
                             _ => panic!(),
                         },
                     };
-                    // println!("id: {}, timestamp: {:?}", log.get_id(), log.get_timestamp())
+                    // println!("{:?}", log);
                 }
             }
             Err(_) => return,
