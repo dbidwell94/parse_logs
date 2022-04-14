@@ -20,15 +20,12 @@ where
     where
         W: Readable + Overwrite,
     {
-        let sl: StructuredLog;
-
-        match serde_json::from_str::<StructuredLog>(&writer.read_as_str()) {
-            Ok(val) => sl = val,
-            Err(e) => {
-                println!("{:?}", e);
-                sl = StructuredLog::empty();
-            },
+        let sl: StructuredLog = match StructuredLog::init(&writer.read_as_str()) {
+            Some(log) => log,
+            None => StructuredLog::empty()
         };
+
+        println!("Starting with {} logs", sl.count_of_addresses());
 
         Logger {
             writer,
@@ -40,9 +37,7 @@ where
         self.structured_log.add_ip_log(&sshd_log)?;
         self.writer
             .overwrite(
-                serde_json::to_vec_pretty::<StructuredLog>(&self.structured_log)
-                    .unwrap()
-                    .as_slice(),
+                serde_json::to_string_pretty(&self.structured_log).unwrap().as_bytes()
             )
             .expect("Unable to write to writer");
         return Ok(());

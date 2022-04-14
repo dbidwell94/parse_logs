@@ -80,7 +80,12 @@ where
                         },
                     };
 
-                    logger.add_log(&log);
+                    match logger.add_log(&log) {
+                        Ok(_) => {},
+                        Err(e) => {
+                            // println!("{:?}", e);
+                        }
+                    }
                 }
             }
             Err(_) => return,

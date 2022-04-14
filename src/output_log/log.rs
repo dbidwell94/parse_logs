@@ -21,6 +21,21 @@ impl StructuredLog {
         }
     }
 
+    pub fn init(input: &str) -> Option<StructuredLog> {
+        return match serde_json::from_str::<StructuredLog>(input) {
+            Ok(mut log) => {
+
+                log.remote_endpoints_map = HashMap::new();
+                for remote_endpoint in &log.remote_endpoints {
+                    log.remote_endpoints_map.insert(remote_endpoint.address.to_owned(), remote_endpoint.to_owned());
+                }
+
+                return Some(log)
+            },
+            Err(_) => None
+        };
+    }
+
     pub fn sort_endpoints(&mut self) {
         let mut vec: Vec<RemoteEndpoint> = Vec::new();
 
@@ -57,6 +72,10 @@ impl StructuredLog {
         );
         self.sort_endpoints();
         return Ok(());
+    }
+
+    pub fn count_of_addresses(&self) -> usize {
+        self.remote_endpoints.len()
     }
 }
 
