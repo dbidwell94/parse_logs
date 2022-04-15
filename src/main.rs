@@ -1,3 +1,5 @@
+extern crate core;
+
 mod output_log;
 mod ssh_log;
 
@@ -17,7 +19,7 @@ pub trait Readable {
 
 impl Overwrite for File {
     fn overwrite(&mut self, data: &[u8]) -> Result<(), Error> {
-        self.seek(SeekFrom::Start(0))?;
+        self.set_len(0)?;
         self.write(data)?;
         return Ok(());
     }
@@ -26,8 +28,11 @@ impl Overwrite for File {
 impl Overwrite for Vec<u8> {
     fn overwrite(&mut self, data: &[u8]) -> Result<(), Error> {
         self.clear();
+        self.resize(data.len(), 0);
+        let mut index: usize = 0;
         for datum in data {
-            self.push(datum.to_owned());
+            self[index] = datum.to_owned();
+            index += 1;
         }
         return Ok(());
     }
@@ -49,24 +54,19 @@ impl Readable for Vec<u8> {
 
 const PARSE_LOGS_LOG_LOCATION: &'static str = "./parse_logs.log";
 
-enum LogType {
-    SSHD(SSHDLog),
-}
-
-fn parse_stdin<R, W>(mut reader: R, mut writer: &mut W)
+fn parse_stdin<R, W>(mut reader: R, writer: &mut W) -> Result<(), SSHDLogError>
 where
     R: BufRead,
     W: Overwrite + Readable,
 {
     let mut str_buffer: String = String::new();
-
     let mut logger = Logger::new(writer);
 
     loop {
         match reader.read_line(&mut str_buffer) {
             Ok(bytes_read) => {
                 if bytes_read == 0 {
-                    return ();
+                    return Ok(());
                 }
                 let split_strings = str_buffer.split("\n");
                 for split_string in split_strings {
@@ -80,21 +80,16 @@ where
                         },
                     };
 
-                    match logger.add_log(&log) {
-                        Ok(_) => {},
-                        Err(e) => {
-                            // println!("{:?}", e);
-                        }
-                    }
+                    logger.add_log(&log)?
                 }
             }
-            Err(_) => return,
+            Err(_) => return Ok(()),
         }
         str_buffer = String::new();
     }
 }
 
-fn main() {
+fn main() -> Result<(), SSHDLogError> {
     let stdin = io::stdin();
 
     let path = Path::new(PARSE_LOGS_LOG_LOCATION);
@@ -107,22 +102,25 @@ fn main() {
         .open(path)
         .expect(format!("Unable to open file at {}", path.to_str().unwrap()).as_str());
 
-    parse_stdin(stdin.lock(), &mut file);
+    parse_stdin(stdin.lock(), &mut file)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn it_works() {
         let input = "Apr 10 00:00:10 devinserver sshd[1748198]: Invalid user DudePerson from 143.198.68.239 port 56720";
-        let mut output: Vec<u8> = vec![0];
+        let mut log_buffer_1: Vec<u8> = vec![0];
+        let mut log_buffer_2: Vec<u8> = vec![0];
 
-        parse_stdin(input.as_bytes(), &mut output);
+        parse_stdin(input.as_bytes(), &mut log_buffer_1).unwrap();
         let log = SSHDLog::new(input).unwrap();
-        assert_eq!(
-            String::from_utf8(output).unwrap(),
-            serde_json::to_string_pretty(&log).unwrap()
-        )
+
+        {
+            let mut logger = Logger::new(&mut log_buffer_2);
+            logger.add_log(&log).unwrap();
+        }
     }
 }

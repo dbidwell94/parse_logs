@@ -24,15 +24,17 @@ impl StructuredLog {
     pub fn init(input: &str) -> Option<StructuredLog> {
         return match serde_json::from_str::<StructuredLog>(input) {
             Ok(mut log) => {
-
                 log.remote_endpoints_map = HashMap::new();
                 for remote_endpoint in &log.remote_endpoints {
-                    log.remote_endpoints_map.insert(remote_endpoint.address.to_owned(), remote_endpoint.to_owned());
+                    log.remote_endpoints_map.insert(
+                        remote_endpoint.address.to_owned(),
+                        remote_endpoint.to_owned(),
+                    );
                 }
 
-                return Some(log)
-            },
-            Err(_) => None
+                return Some(log);
+            }
+            Err(_) => None,
         };
     }
 
@@ -83,4 +85,40 @@ impl StructuredLog {
 pub struct RemoteEndpoint {
     address: IpAddr,
     log_count: usize,
+}
+
+#[cfg(test)]
+mod structured_log_test {
+    use crate::output_log::log::StructuredLog;
+    use crate::SSHDLog;
+    use std::io::stdin;
+
+    const FIRST_LOG: &'static str = "Apr 11 14:11:05 devinserver sshd[2567619]: Connection closed by invalid user debian 190.1.202.12 port 52218 [preauth]";
+
+    #[test]
+    fn test_structured_log_empty() {
+        let structured_log = StructuredLog::empty();
+        assert_eq!(structured_log.remote_endpoints_map.len(), 0);
+        assert_eq!(structured_log.remote_endpoints.len(), 0);
+    }
+
+    #[test]
+    fn test_structured_log_insertion() {
+        let mut structured_log = StructuredLog::empty();
+        assert_eq!(structured_log.remote_endpoints_map.len(), 0);
+
+        let log_to_insert = SSHDLog::new(&FIRST_LOG).unwrap();
+        assert_ne!(structured_log.add_ip_log(&log_to_insert).is_err(), true);
+
+        assert_eq!(structured_log.remote_endpoints_map.len(), 1);
+        assert_eq!(structured_log.remote_endpoints.len(), 1);
+    }
+
+    #[test]
+    fn test_structured_log_with_same_ip_address() {
+        let mut structured_log = StructuredLog::empty();
+        assert_eq!(structured_log.remote_endpoints_map.len(), 0);
+        let log_to_insert = SSHDLog::new(&FIRST_LOG).unwrap();
+        assert_ne!(structured_log.add_ip_log(&log_to_insert).is_err(), true);
+    }
 }
