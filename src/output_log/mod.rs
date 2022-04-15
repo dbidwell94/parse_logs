@@ -36,7 +36,12 @@ where
 
     pub fn add_log(&mut self, sshd_log: &SSHDLog) -> Result<(), SSHDLogError> {
         self.structured_log.add_ip_log(&sshd_log)?;
-        return Ok(self.write_data_to_writer());
+        println!(
+            "Added log. Now has {}",
+            self.structured_log.count_of_addresses()
+        );
+        self.write_data_to_writer();
+        Ok(())
     }
 
     fn write_data_to_writer(&mut self) {

@@ -20,7 +20,8 @@ pub trait Readable {
 impl Overwrite for File {
     fn overwrite(&mut self, data: &[u8]) -> Result<(), Error> {
         self.set_len(0)?;
-        self.write(data)?;
+        self.seek(SeekFrom::Start(0))?;
+        self.write_all(data)?;
         return Ok(());
     }
 }
@@ -76,11 +77,23 @@ where
                             SSHDLogError::LogParseError => {
                                 continue;
                             }
+                            SSHDLogError::IpParseError => {
+                                println!("Error parsing IP Address");
+                                continue;
+                            }
                             _ => panic!(),
                         },
                     };
 
-                    logger.add_log(&log)?
+                    match logger.add_log(&log) {
+                        Ok(_) => {}
+                        Err(e) => match e {
+                            SSHDLogError::IpParseError => {
+                                println!("Error parsing IP Address");
+                            }
+                            _ => {}
+                        },
+                    }
                 }
             }
             Err(_) => return Ok(()),
