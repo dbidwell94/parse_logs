@@ -53,7 +53,7 @@ impl Readable for Vec<u8> {
     }
 }
 
-const PARSE_LOGS_LOG_LOCATION: &'static str = "./parse_logs.log";
+const PARSE_LOGS_LOG_LOCATION: &'static str = "/etc/parselogs/logdb.json";
 
 fn parse_stdin<R, W>(mut reader: R, writer: &mut W) -> Result<(), SSHDLogError>
 where
@@ -113,7 +113,13 @@ fn main() -> Result<(), SSHDLogError> {
         .read(true)
         .append(false)
         .open(path)
-        .expect(format!("Unable to open file at {}", path.to_str().unwrap()).as_str());
+        .expect(
+            format!(
+                "Unable to open file at {} with RW permissions",
+                path.to_str().unwrap()
+            )
+            .as_str(),
+        );
 
     parse_stdin(stdin.lock(), &mut file)
 }
