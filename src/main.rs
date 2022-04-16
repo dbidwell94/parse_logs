@@ -2,6 +2,7 @@ extern crate core;
 
 mod output_log;
 mod ssh_log;
+mod test_helpers;
 
 use self::ssh_log::{SSHDLog, SSHDLogError};
 use output_log::Logger;
@@ -78,7 +79,6 @@ where
                                 continue;
                             }
                             SSHDLogError::IpParseError => {
-                                println!("Error parsing IP Address");
                                 continue;
                             }
                             _ => panic!(),
@@ -88,9 +88,7 @@ where
                     match logger.add_log(&log) {
                         Ok(_) => {}
                         Err(e) => match e {
-                            SSHDLogError::IpParseError => {
-                                println!("Error parsing IP Address");
-                            }
+                            SSHDLogError::IpParseError => {}
                             _ => {}
                         },
                     }
@@ -126,20 +124,43 @@ fn main() -> Result<(), SSHDLogError> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{parse_stdin, Logger, SSHDLog};
+    use crate::test_helpers::test_helpers;
+    use test_helpers::MockWriter;
 
     #[test]
     fn it_works() {
         let input = "Apr 10 00:00:10 devinserver sshd[1748198]: Invalid user DudePerson from 143.198.68.239 port 56720";
-        let mut log_buffer_1: Vec<u8> = vec![0];
-        let mut log_buffer_2: Vec<u8> = vec![0];
+        let mut mock_writer = MockWriter::new();
+        let mut mock_writer_2 = MockWriter::new();
 
-        parse_stdin(input.as_bytes(), &mut log_buffer_1).unwrap();
+        parse_stdin(input.as_bytes(), &mut mock_writer).unwrap();
         let log = SSHDLog::new(input).unwrap();
 
         {
-            let mut logger = Logger::new(&mut log_buffer_2);
+            let mut logger = Logger::new(&mut mock_writer_2);
             logger.add_log(&log).unwrap();
         }
     }
+
+    #[test]
+    fn test_invalid_input_doesnt_log() {
+        let invalid_input = "INVALID INPUT";
+        let mut mock_writer = MockWriter::new();
+        parse_stdin(invalid_input.as_bytes(), &mut mock_writer).unwrap();
+        // overwrite should only have been called once when the data was flushed
+        assert_eq!(mock_writer.get_overwrite_calls(), &1usize);
+    }
+
+    #[test]
+    fn test_invalid_ip_address() {
+        let input = "Apr 10 00:00:10 devinserver sshd[1748198]: Invalid user DudePerson from 143.198.68.23934 port 56720";
+        let mut mock_writer = MockWriter::new();
+        parse_stdin(input.as_bytes(), &mut mock_writer).unwrap();
+        // overwrite should have been called twice for valid log and a flush
+        assert_eq!(mock_writer.get_overwrite_calls(), &2usize);
+    }
+
+    #[test]
+    fn test_read_for_file_impl() {}
 }

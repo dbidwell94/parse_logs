@@ -44,6 +44,7 @@ impl SSHDLog {
     ///
     /// # Returns
     /// * `&chrono::NaiveDateTime`
+    #[allow(dead_code)]
     pub fn get_timestamp(&self) -> &NaiveDateTime {
         return &self.log_timestamp;
     }
@@ -52,6 +53,7 @@ impl SSHDLog {
     ///
     /// # Returns
     /// * `&std::i64`
+    #[allow(dead_code)]
     pub fn get_id(&self) -> &i64 {
         return &self.id;
     }
@@ -105,7 +107,6 @@ mod sshd_tests {
 
         assert_ne!(log, Err(SSHDLogError::LogParseError));
         assert_ne!(log, Err(SSHDLogError::TimeParseError));
-        assert_ne!(log, Err(SSHDLogError::Unknown));
         assert_ne!(log, Err(SSHDLogError::HostnameParseError));
         assert_ne!(log, Err(SSHDLogError::IdParseError));
         assert_ne!(log, Err(SSHDLogError::IpParseError));

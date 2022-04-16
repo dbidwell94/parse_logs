@@ -3,7 +3,6 @@ mod log;
 use super::SSHDLog;
 use crate::{Overwrite, Readable, SSHDLogError};
 use log::StructuredLog;
-use std::io::BufRead;
 
 pub struct Logger<'a, W>
 where
@@ -67,55 +66,16 @@ where
 #[cfg(test)]
 mod logger_tests {
     use crate::output_log::log::StructuredLog;
-    use crate::{Logger, Overwrite, Readable, SSHDLog};
-    use std::io::Error;
-
-    struct MockWriter {
-        overwrite_calls: usize,
-        read_calls: usize,
-        data: Vec<u8>,
-    }
-
-    impl MockWriter {
-        pub fn new() -> Self {
-            MockWriter {
-                overwrite_calls: 0,
-                read_calls: 0,
-                data: Vec::new(),
-            }
-        }
-
-        pub fn get_overwrite_calls(&self) -> &usize {
-            &self.overwrite_calls
-        }
-
-        pub fn get_read_calls(&self) -> &usize {
-            &self.read_calls
-        }
-    }
-
-    impl Overwrite for MockWriter {
-        fn overwrite(&mut self, data: &[u8]) -> Result<(), Error> {
-            self.overwrite_calls += 1;
-            self.data.overwrite(data)
-        }
-    }
-
-    impl Readable for MockWriter {
-        fn read_as_str(&mut self) -> String {
-            self.read_calls += 1;
-            self.data.read_as_str()
-        }
-    }
+    use crate::test_helpers::test_helpers::MockWriter;
+    use crate::{Logger, SSHDLog};
 
     const FIRST_LOG: &'static str = "Apr 11 14:11:05 devinserver sshd[2567619]: Connection closed by invalid user debian 190.1.202.12 port 52218 [preauth]";
-    const SECOND_LOG: &'static str = "Apr 11 14:10:59 devinserver sshd[2567574]: Failed password for invalid user fcaecaecca from 183.214.86.14 port 36614 ssh2";
 
     #[test]
     fn test_log_is_initially_populated() {
         let mut mock_writer = MockWriter::new();
         assert_eq!(mock_writer.get_overwrite_calls(), &0usize);
-        assert_eq!(mock_writer.data.len(), 0);
+        assert_eq!(mock_writer.get_data().len(), 0);
         let test_log = SSHDLog::new(&FIRST_LOG).unwrap();
         {
             let mut logger = Logger::new(&mut mock_writer);
@@ -125,7 +85,8 @@ mod logger_tests {
         base_written_log.add_ip_log(&test_log).unwrap();
 
         let written_log_to_test =
-            StructuredLog::init(&String::from_utf8(mock_writer.data.to_owned()).unwrap()).unwrap();
+            StructuredLog::init(&String::from_utf8(mock_writer.get_data().to_owned()).unwrap())
+                .unwrap();
 
         assert_eq!(
             base_written_log.count_of_addresses(),

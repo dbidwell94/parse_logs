@@ -9,7 +9,6 @@ pub enum SSHDLogError {
     IdParseError,
     IpParseError,
     PortParseError,
-    Unknown,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
