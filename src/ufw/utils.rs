@@ -1,8 +1,11 @@
 use crate::ufw::ufw_status::{
-    NetworkProtocol, UFWAction, UFWPortRule, UFWPortRuleSpecification, UFWRuleDirection,
+    NetworkProtocol, UFWAction, UFWIpRuleSpecification, UFWPortRule, UFWPortRuleSpecification,
+    UFWRuleDirection,
 };
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::net::IpAddr;
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub enum UFWParseError {
@@ -127,6 +130,45 @@ pub fn parse_ufw_action(input: &str) -> Result<UFWAction, UFWParseError> {
                 })
                 .ok_or(UFWParseError::ActionParseError(true))??;
             Ok(allow_or_deny)
+        }
+    };
+}
+
+pub fn parse_ufw_ip(input: &str) -> Result<UFWIpRuleSpecification, UFWParseError> {
+    if !IP_RULE_REGEX.is_match(input) {
+        return Err(UFWParseError::IpParseError(true));
+    }
+
+    return match IP_RULE_REGEX.captures(input) {
+        None => Err(UFWParseError::IpParseError(true)),
+        Some(cap) => {
+            if let Some(value) = cap.get(3) {
+                let ip_addr_str = value.as_str();
+                Ok(UFWIpRuleSpecification::Specific(
+                    IpAddr::from_str(ip_addr_str)
+                        .or_else(|_| Err(UFWParseError::IpParseError(true)))?,
+                ))
+            } else {
+                let anywhere_str = cap
+                    .get(1)
+                    .ok_or_else(|| UFWParseError::IpParseError(true))?
+                    .as_str();
+                if anywhere_str.to_lowercase() != "anywhere" {
+                    Err(UFWParseError::IpParseError(true))
+                } else {
+                    match cap.get(2) {
+                        None => Ok(UFWIpRuleSpecification::Anywhere(false)),
+                        Some(value) => {
+                            let v6_str = value.as_str().to_lowercase();
+                            if v6_str != "v6" {
+                                Err(UFWParseError::IpParseError(true))
+                            } else {
+                                Ok(UFWIpRuleSpecification::Anywhere(true))
+                            }
+                        }
+                    }
+                }
+            }
         }
     };
 }

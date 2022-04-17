@@ -57,6 +57,8 @@ impl UFW {
         let status =
             UFWStatus::new(cmd.stdout.to_owned()).or_else(|e| Err(UFWError::UFWStatusError(e)))?;
 
+        println!("{:?}", status);
+
         todo!()
     }
 

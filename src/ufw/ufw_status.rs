@@ -1,11 +1,13 @@
-use crate::ufw::utils::{parse_port_rule, parse_ufw_action, UFWParseError};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::net::IpAddr;
+
+use crate::ufw::utils::{parse_port_rule, parse_ufw_action, parse_ufw_ip, UFWParseError};
 
 #[derive(Debug)]
 pub enum UFWStatusError {
     ErrorParsingStatus,
     ErrorParsingAction,
+    ErrorParsingIp,
 }
 
 #[derive(Debug)]
@@ -19,6 +21,8 @@ impl UFWStatus {
     }
 
     fn parse_stdout(stdout: Vec<u8>) -> Result<Self, UFWStatusError> {
+        let mut hs: HashSet<UFWRule> = HashSet::new();
+
         let status_str =
             String::from_utf8(stdout).or_else(|_| Err(UFWStatusError::ErrorParsingStatus))?;
 
@@ -45,49 +49,61 @@ impl UFWStatus {
                 }
             };
 
-            println!("{:?} {:?}", port_rule, action);
+            let ip = match parse_ufw_ip(status_line) {
+                Err(e) => {
+                    if let UFWParseError::IpParseError(true) = e {
+                        Err(UFWStatusError::ErrorParsingIp)
+                    } else {
+                        continue;
+                    }
+                }
+                Ok(value) => Ok(value),
+            }?;
+
+            hs.insert(UFWRule {
+                action,
+                port: port_rule,
+                ip_address: ip,
+            });
         }
 
-        // let status = parse_port_rule(status_str.as_str())
-        //     .or_else(|_| Err(UFWStatusError::ErrorParsingStatus))?;
-
-        todo!()
+        return Ok(Self { rules: hs });
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum UFWPortRuleSpecification {
     Anywhere,
     Specific(u16),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum UFWIpRuleSpecification {
     /// If true, rule is for IPV6.
     Anywhere(bool),
     Specific(IpAddr),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum NetworkProtocol {
     Tcp,
     Udp,
     Both,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum UFWRuleDirection {
     In,
     Out,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum UFWAction {
     Allow(UFWRuleDirection),
     Deny(UFWRuleDirection),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct UFWPortRule {
     pub(crate) protocol: NetworkProtocol,
     pub(crate) port_from: UFWPortRuleSpecification,
@@ -95,7 +111,7 @@ pub struct UFWPortRule {
     pub(crate) is_v6: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct UFWRule {
     port: UFWPortRule,
     action: UFWAction,
