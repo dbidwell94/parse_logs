@@ -18,7 +18,7 @@ const PORT_RULE_REGEX_STR: &'static str =
     r"(?i)^(\d+|anywhere)(?::(\d+))?(?:/(tcp|udp))?(?:\s\((v6)\))?";
 const ACTION_RULE_REGEX_STR: &'static str = r"(?i)(deny|allow)\s(in|out)";
 const IP_RULE_REGEX_STR: &'static str =
-    r"(?i)(?:(?:deny|allow)\s(?:in|out))\s+(?:(anywhere) (?:\((v6)\))?|((?:\w+|:|\.)+))";
+    r"(?i)(?:(?:deny|allow|reject)\s(?:in|out))\s+(?:(anywhere)(?:\s?\((v6)\))?|((?:\w+|:|\.)+))";
 
 lazy_static! {
     static ref PORT_RULE_REGEX: Regex = Regex::new(PORT_RULE_REGEX_STR).unwrap();
@@ -171,4 +171,141 @@ pub fn parse_ufw_ip(input: &str) -> Result<UFWIpRuleSpecification, UFWParseError
             }
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ufw::ufw_status::{
+        NetworkProtocol, UFWAction, UFWIpRuleSpecification, UFWPortRuleSpecification,
+        UFWRuleDirection,
+    };
+    use crate::ufw::utils::{parse_port_rule, parse_ufw_action, parse_ufw_ip};
+    use std::net::IpAddr;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_parse_port_rule_range() {
+        let port_rule_str = "2456:2457/udp              ALLOW       Anywhere";
+        let port_rule_result = parse_port_rule(port_rule_str);
+        assert!(port_rule_result.is_ok());
+        let port_rule = port_rule_result.unwrap();
+        assert_eq!(port_rule.is_v6, false);
+        assert_eq!(
+            port_rule.port_from,
+            UFWPortRuleSpecification::Specific(2456u16)
+        );
+        assert_eq!(
+            port_rule.port_to,
+            Some(UFWPortRuleSpecification::Specific(2457u16))
+        );
+        assert_eq!(port_rule.protocol, NetworkProtocol::Udp);
+    }
+
+    #[test]
+    fn test_parse_port_rule_non_range() {
+        let port_rule_str = "25/tcp                     ALLOW       Anywhere";
+        let port_rule_result = parse_port_rule(port_rule_str);
+        assert!(port_rule_result.is_ok());
+        let port_rule = port_rule_result.unwrap();
+        assert_eq!(
+            port_rule.port_from,
+            UFWPortRuleSpecification::Specific(25u16)
+        );
+        assert_eq!(port_rule.port_to, None);
+        assert_eq!(port_rule.protocol, NetworkProtocol::Tcp);
+        assert_eq!(port_rule.is_v6, false);
+    }
+
+    #[test]
+    fn test_parse_port_rule_non_range_v6() {
+        let port_rule_str = "8675 (v6)                  ALLOW       Anywhere (v6)";
+        let port_rule_result = parse_port_rule(port_rule_str);
+        assert!(port_rule_result.is_ok());
+        let port_rule = port_rule_result.unwrap();
+        assert_eq!(port_rule.is_v6, true);
+        assert_eq!(port_rule.protocol, NetworkProtocol::Both);
+        assert_eq!(
+            port_rule.port_from,
+            UFWPortRuleSpecification::Specific(8675u16)
+        );
+        assert_eq!(port_rule.port_to, None);
+    }
+
+    #[test]
+    fn test_parse_ufw_action_allow_inbound() {
+        let action_str = "8675 (v6)                  ALLOW IN    Anywhere (v6)";
+        let action_result = parse_ufw_action(action_str);
+        assert!(action_result.is_ok());
+        let action = action_result.unwrap();
+        assert_eq!(action, UFWAction::Allow(UFWRuleDirection::In));
+    }
+
+    #[test]
+    fn test_parse_ufw_action_allow_outbound() {
+        let action_str = "8675 (v6)                  ALLOW OUT    Anywhere (v6)";
+        let action_result = parse_ufw_action(action_str);
+        assert!(action_result.is_ok());
+        let action = action_result.unwrap();
+        assert_eq!(action, UFWAction::Allow(UFWRuleDirection::Out));
+    }
+
+    #[test]
+    fn test_parse_ufw_action_deny_in() {
+        let action_str = "8675 (v6)                  DENY IN    Anywhere (v6)";
+        let action_result = parse_ufw_action(action_str);
+        assert!(action_result.is_ok());
+        let action = action_result.unwrap();
+        assert_eq!(action, UFWAction::Deny(UFWRuleDirection::In));
+    }
+
+    #[test]
+    fn test_parse_ufw_action_deny_outbound() {
+        let action_str = "8675 (v6)                  DENY OUT    Anywhere (v6)";
+        let action_result = parse_ufw_action(action_str);
+        assert!(action_result.is_ok());
+        let action = action_result.unwrap();
+        assert_eq!(action, UFWAction::Deny(UFWRuleDirection::Out));
+    }
+
+    #[test]
+    fn test_parse_ufw_ip_anywhere_v6() {
+        let ip_str = "8675 (v6)                  DENY OUT    Anywhere (v6)";
+        let ip_result = parse_ufw_ip(ip_str);
+        assert!(ip_result.is_ok());
+        let ip = ip_result.unwrap();
+        assert_eq!(ip, UFWIpRuleSpecification::Anywhere(true));
+    }
+
+    #[test]
+    fn test_parse_ufw_ip_anywhere() {
+        let ip_str = "8675 (v6)                  DENY IN    Anywhere";
+        let ip_result = parse_ufw_ip(ip_str);
+        assert!(ip_result.is_ok());
+        let ip = ip_result.unwrap();
+        assert_eq!(ip, UFWIpRuleSpecification::Anywhere(false));
+    }
+
+    #[test]
+    fn test_parse_ufw_ip_specific_v6() {
+        let ip_str = "Anywhere (v6)              DENY IN        2001:4860:4860::8844";
+        let ip_result = parse_ufw_ip(ip_str);
+        assert!(ip_result.is_ok());
+        let ip = ip_result.unwrap();
+        assert_eq!(
+            ip,
+            UFWIpRuleSpecification::Specific(IpAddr::from_str("2001:4860:4860::8844").unwrap())
+        );
+    }
+
+    #[test]
+    fn test_parse_ufw_ip_specific() {
+        let ip_str = "Anywhere              DENY IN       10.0.0.1";
+        let ip_result = parse_ufw_ip(ip_str);
+        assert!(ip_result.is_ok());
+        let ip = ip_result.unwrap();
+        assert_eq!(
+            ip,
+            UFWIpRuleSpecification::Specific(IpAddr::from_str("10.0.0.1").unwrap())
+        );
+    }
 }
