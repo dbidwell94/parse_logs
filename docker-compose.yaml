@@ -9,8 +9,6 @@ services:
       target: tester
     cap_add:
       - NET_ADMIN
-    env_file:
-      - .env
     volumes:
       - "./Cargo.lock:/app/Cargo.lock"
       - "./Cargo.toml:/app/Cargo.toml"
