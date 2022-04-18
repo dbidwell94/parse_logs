@@ -1,2 +1,7 @@
 # Generated files
 /target/
+
+# Environment variables
+.env
+*.profraw
+coverage

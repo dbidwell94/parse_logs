@@ -3,6 +3,7 @@ extern crate core;
 mod output_log;
 mod ssh_log;
 mod test_helpers;
+mod ufw;
 
 use self::ssh_log::{SSHDLog, SSHDLogError};
 use output_log::Logger;

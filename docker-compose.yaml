@@ -1,0 +1,16 @@
+version: '3.9'
+
+services:
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: tester
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - "./Cargo.lock:/app/Cargo.lock"
+      - "./Cargo.toml:/app/Cargo.toml"
+      - "./src:/app/src"
+      - "./coverage:/app/coverage"
