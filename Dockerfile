@@ -22,7 +22,7 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 RUN $HOME/.cargo/bin/rustup component add llvm-tools-preview
 RUN $HOME/.cargo/bin/cargo install grcov
 
-COPY ./test.sh .
+COPY docker/test.sh .
 RUN chmod 777 ./test.sh
 RUN chown $(id -u $USER):$(id -g $USER) ./test.sh
 

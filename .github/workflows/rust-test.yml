@@ -13,10 +13,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
-      - name: Build
-        run: docker-compose build
       - name: Run tests
-        run: docker-compose run test
+        run: ./runtests.sh
