@@ -1,5 +1,15 @@
 FROM ubuntu:21.04 AS builder
 
+#RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+#
+## Create a .profile
+#RUN echo 'PATH=$PATH:/foo/bar' > ~/.profile
+#
+## Create a .bash_profile
+#RUN echo 'PATH=$PATH:/hello-world' > ~/.bash_profile
+
+SHELL ["/bin/bash", "-c"]
+
 ENV DEBIAN_FRONTEND=noninteractive
 ENV HOST_USER_ID=1000
 ENV HOST_GROUP_ID=1000
@@ -19,6 +29,8 @@ RUN chmod +x ./test.sh
 RUN chown 777 ./test.sh
 RUN su ${HOST_USERNAME}
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+RUN $HOME/.cargo/bin/rustup component add llvm-tools-preview
+RUN $HOME/.cargo/bin/cargo install grcov
 RUN exit
 
 

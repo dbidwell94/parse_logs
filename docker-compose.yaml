@@ -12,5 +12,7 @@ services:
     env_file:
       - .env
     volumes:
-      - "./:/app"
-      - /app/target
+      - "./Cargo.lock:/app/Cargo.lock"
+      - "./Cargo.toml:/app/Cargo.toml"
+      - "./src:/app/src"
+      - "./coverage:/app/coverage"
