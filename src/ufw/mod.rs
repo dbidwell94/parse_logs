@@ -2,7 +2,7 @@ mod ufw_status;
 mod utils;
 
 use crate::ufw::ufw_status::{UFWStatus, UFWStatusError};
-use std::process::{Command, ExitStatus, Output};
+use std::process::{Command, Output};
 
 #[derive(Debug)]
 pub enum UFWError {
@@ -15,6 +15,7 @@ pub enum UFWError {
 #[derive(Debug)]
 pub struct UFW {
     ufw_location: String,
+    ufw_status: Option<UFWStatus>,
 }
 
 impl UFW {
@@ -40,12 +41,13 @@ impl UFW {
 
         return Ok(UFW {
             ufw_location: location,
+            ufw_status: None,
         });
     }
 
-    pub fn status(&self) -> Result<UFWStatus, UFWError> {
-        let cmd = Command::new("sudo")
-            .args(["ufw", "status", "verbose"])
+    pub fn status(&mut self) -> Result<&UFWStatus, UFWError> {
+        let cmd = Command::new("ufw")
+            .args(["status", "verbose"])
             .output()
             .or_else(|e| {
                 println!("{:?}", e);
@@ -57,9 +59,12 @@ impl UFW {
         let status =
             UFWStatus::new(cmd.stdout.to_owned()).or_else(|e| Err(UFWError::UFWStatusError(e)))?;
 
-        println!("{:?}", status);
-
-        todo!()
+        self.ufw_status = Some(status);
+        let to_return = self
+            .ufw_status
+            .as_ref()
+            .ok_or(UFWError::UFWStatusError(UFWStatusError::Unknown))?;
+        return Ok(to_return);
     }
 
     fn check_status_ok(output: &Output, err_to_throw: UFWError) -> Result<(), UFWError> {
@@ -83,7 +88,7 @@ mod tests {
 
     #[test]
     fn test_ufw_status() {
-        let ufw = UFW::new().unwrap();
-        let status = ufw.status().unwrap();
+        let mut ufw = UFW::new().unwrap();
+        ufw.status().expect("Unable to obtain ufw status");
     }
 }

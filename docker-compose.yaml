@@ -1,0 +1,13 @@
+version: '3.9'
+
+services:
+
+  parselogs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: tester
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - "./:/app"

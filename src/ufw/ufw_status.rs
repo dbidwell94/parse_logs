@@ -8,6 +8,7 @@ pub enum UFWStatusError {
     ErrorParsingStatus,
     ErrorParsingAction,
     ErrorParsingIp,
+    Unknown,
 }
 
 #[derive(Debug)]
