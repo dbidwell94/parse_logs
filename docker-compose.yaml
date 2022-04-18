@@ -9,5 +9,8 @@ services:
       target: tester
     cap_add:
       - NET_ADMIN
+    env_file:
+      - .env
     volumes:
       - "./:/app"
+      - /app/target
