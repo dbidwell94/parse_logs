@@ -1,0 +1,2 @@
+plugins:
+- plugin_location: ./target/debug/libexample_plugin.so
