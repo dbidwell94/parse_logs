@@ -56,4 +56,17 @@ impl Plugin {
     pub fn get_plugin_name(&self) -> &str {
         &self.plugin_name
     }
+
+    pub fn get_log_path(&self) -> anyhow::Result<String> {
+        let to_return: String;
+        unsafe {
+            let get_log_location: Symbol<GetLogPath> =
+                self.plugin_library.get(LOG_PATH_FUNC_NAME)?;
+            let returned_cstr = CString::from_raw(get_log_location());
+            to_return = returned_cstr.into_string()?;
+        };
+        return Ok(to_return);
+    }
 }
+
+pub async fn parse_plugin(plugin: Plugin) {}

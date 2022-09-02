@@ -16,8 +16,7 @@ extern "C" fn get_log_path() -> *mut c_char {
 #[no_mangle]
 extern "C" fn parse_log_string(raw_log_str: *mut c_char) {
     let log_str = unsafe { CString::from_raw(raw_log_str) };
-
-    panic!("Not implemented");
+    println!("{:?}", log_str);
 }
 
 #[no_mangle]
