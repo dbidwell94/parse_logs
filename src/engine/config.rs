@@ -32,7 +32,9 @@ impl Config {
 pub fn generate_default_config(config_file_location_option: Option<&str>) -> anyhow::Result<()> {
     let config_file_location = config_file_location_option.unwrap_or(DEFAULT_CONFIG_LOCATION);
     let config = Config {
-        plugins: vec![PluginInfo {plugin_location: String::from("/home/dbidwell/Documents/PersonalDevelopment/parse_logs_v2/target/release/libexample_plugin.so")}],
+        plugins: vec![PluginInfo {
+            plugin_location: String::from("/etc/parse_logs/example_library.so"),
+        }],
     };
 
     let path = Path::new(config_file_location);

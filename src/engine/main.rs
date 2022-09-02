@@ -29,7 +29,7 @@ impl Engine {
     }
 
     pub fn get_config(&self) -> &Config {
-        return &self.config;
+        &self.config
     }
 
     pub fn add_plugin(&mut self, location: &str) -> anyhow::Result<()> {
@@ -56,9 +56,9 @@ impl Default for Engine {
     }
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let engine = Engine::new(config::get_or_create_config(Some("./config-devel.yaml"))?);
-    println!("{:?}", engine.plugins);
 
     return Ok(());
 }
