@@ -1,7 +1,7 @@
 use libloading::{Library, Symbol};
 use std::ffi::{c_char, CStr, CString};
+use std::sync::mpsc::Receiver;
 use thiserror::Error;
-use tokio::sync::mpsc::Receiver;
 
 type GetLogPath = unsafe extern "C" fn() -> *mut c_char;
 const LOG_PATH_FUNC_NAME: &[u8] = b"get_log_path";
@@ -12,7 +12,8 @@ const PLUGIN_NAME_FUNC_NAME: &[u8] = b"get_plugin_name";
 type ParseLogString = unsafe extern "C" fn(*mut c_char);
 const PLUGIN_PARSE_LOG_STRING_NAME: &[u8] = b"parse_log_string";
 
-type CheckLogParseable = unsafe extern "C" fn(*const c_char) -> bool;
+type CheckLogParseable = unsafe extern "C" fn(*mut c_char) -> bool;
+const PLUGIN_CHECK_LOG_PARSEABLE: &[u8] = b"check_log_parseable";
 
 #[derive(Error, Debug)]
 enum PluginError {
@@ -58,6 +59,18 @@ impl Plugin {
         &self.plugin_name
     }
 
+    pub fn is_log_parseable(&self, log_line: &str) -> anyhow::Result<bool> {
+        let parse_fn: Symbol<CheckLogParseable> =
+            unsafe { self.plugin_library.get(PLUGIN_CHECK_LOG_PARSEABLE)? };
+
+        let parseable = unsafe {
+            let c_str = CString::new(log_line)?;
+            parse_fn(c_str.into_raw())
+        };
+
+        return Ok(parseable);
+    }
+
     pub fn get_log_path(&self) -> anyhow::Result<String> {
         let to_return: String;
         unsafe {
@@ -70,4 +83,15 @@ impl Plugin {
     }
 }
 
-pub async fn parse_plugin(plugin: Plugin, rcv: Receiver<String>) {}
+pub async fn parse_plugin(plugin: Plugin, rcv: Receiver<String>) -> anyhow::Result<()> {
+    let iter = rcv.iter();
+    for s in iter {
+        if plugin.is_log_parseable(&s)? {
+            println!("Parseable!");
+        } else {
+            println!("Not Parseable");
+        }
+    }
+
+    return Ok(());
+}

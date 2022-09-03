@@ -13,14 +13,13 @@ use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
-use std::sync::mpsc::Receiver as StdReceiver;
+use std::sync::mpsc::{channel as std_channel, Receiver as StdReceiver, Sender as StdSender};
 use tokio::io::{AsyncSeekExt, BufReader, BufWriter};
-use tokio::sync::mpsc::{Receiver as TokioReceiver, Sender as TokioSender};
 use tokio::task::JoinHandle;
 
 struct Engine {
     plugins: HashMap<String, Option<Plugin>>,
-    log_senders: HashMap<String, Option<TokioSender<String>>>,
+    log_senders: HashMap<String, Option<StdSender<String>>>,
     config: Config,
 }
 
@@ -53,8 +52,7 @@ impl Engine {
         for (_, mut value_option) in self.plugins {
             let value = value_option.take();
             if let Some(plugin) = value {
-                let (sx, rx): (TokioSender<String>, TokioReceiver<String>) =
-                    tokio::sync::mpsc::channel(100);
+                let (sx, rx): (StdSender<String>, StdReceiver<String>) = std_channel();
                 self.log_senders.insert(plugin.get_log_path()?, Some(sx));
                 handles.push(tokio::spawn(async move {
                     parse_plugin(plugin, rx).await;
@@ -66,6 +64,7 @@ impl Engine {
             let sender_option = sender_option.take();
             if let Some(sx) = sender_option {
                 send_threads.push(tokio::spawn(async move {
+                    let sender = sx.clone();
                     let (rx, mut watcher) = create_watcher()?;
                     watcher.watch(Path::new(&log_path), RecursiveMode::NonRecursive)?;
                     let mut file = OpenOptions::new().read(true).open(&log_path)?;
@@ -91,10 +90,7 @@ impl Engine {
                                             let string = std::str::from_utf8(&buffer[0..(read_bytes as usize)])?;
                                             previous_size = current_size;
                                             file.seek(SeekFrom::Start(previous_size))?;
-                                            println!(
-                                                "Data changed at {} changed.\n\tdelta: {}\n\tcontents: {}",
-                                                log_path, delta_size, string
-                                            );
+                                            sender.send(string.to_owned())?;
                                         }
                                         _ => {
                                         }
