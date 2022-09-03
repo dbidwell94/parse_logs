@@ -1,6 +1,7 @@
 use libloading::{Library, Symbol};
 use std::ffi::{c_char, CStr, CString};
 use thiserror::Error;
+use tokio::sync::mpsc::Receiver;
 
 type GetLogPath = unsafe extern "C" fn() -> *mut c_char;
 const LOG_PATH_FUNC_NAME: &[u8] = b"get_log_path";
@@ -69,4 +70,4 @@ impl Plugin {
     }
 }
 
-pub async fn parse_plugin(plugin: Plugin) {}
+pub async fn parse_plugin(plugin: Plugin, rcv: Receiver<String>) {}

@@ -1,7 +1,7 @@
 use std::ffi::{c_char, CString};
 
 const PLUGIN_NAME: &[u8] = b"Example Plugin";
-const LOG_PATH: &[u8] = b"/var/log/auth.log";
+const LOG_PATH: &[u8] = b"/home/dbidwell/Documents/test.log";
 
 #[no_mangle]
 extern "C" fn get_plugin_name() -> *mut c_char {
