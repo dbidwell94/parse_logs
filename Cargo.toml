@@ -10,8 +10,8 @@ name = "parse_engine"
 path = "src/engine/main.rs"
 
 [lib]
-name = "example_plugin"
-path = "src/example_plugin/lib.rs"
+name = "nginx_plugin"
+path = "src/nginx_plugin/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
