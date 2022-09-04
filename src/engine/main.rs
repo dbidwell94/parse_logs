@@ -8,13 +8,11 @@ use notify::{
     event::Event, INotifyWatcher, RecommendedWatcher, RecursiveMode, Result as NotifyResult,
     Watcher,
 };
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::mpsc::{channel as std_channel, Receiver as StdReceiver, Sender as StdSender};
-use tokio::io::{AsyncSeekExt, BufReader, BufWriter};
 use tokio::task::JoinHandle;
 
 struct Engine {
@@ -153,9 +151,37 @@ fn create_watcher() -> AnyhowResult<CreateWatcherReturn> {
     Ok((rx, watcher))
 }
 
+struct ProgramArgs {
+    config_location: Option<String>,
+}
+
+impl ProgramArgs {
+    fn new(args: Vec<String>) -> Self {
+        let mut config_location: Option<String> = None;
+        for (index, arg) in args.iter().enumerate() {
+            if arg.to_lowercase() == "-c" {
+                config_location = Some(
+                    args.get(index + 1)
+                        .expect("Invalid parameter: -c")
+                        .to_owned(),
+                );
+            }
+        }
+
+        Self { config_location }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let engine = Engine::new(config::get_or_create_config(Some("./config-devel.yaml"))?);
+    let args = ProgramArgs::new(std::env::args().collect());
+    let config_location = args
+        .config_location
+        .unwrap_or("./config-devel.yaml".to_owned());
+
+    println!("Using config located at {}", &config_location);
+
+    let engine = Engine::new(config::get_or_create_config(Some(&config_location))?);
     engine.start_parse().await?;
 
     return Ok(());

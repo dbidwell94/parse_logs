@@ -1,0 +1,2 @@
+plugins:
+- plugin_location: /etc/parse_logs/example_library.so
