@@ -1,2 +1,4 @@
 plugins:
 - plugin_location: ./target/release/libnginx_plugin.so
+- plugin_location: ./target/release/libnginx_plugin.so
+- plugin_location: ./target/release/libnginx_plugin.so
