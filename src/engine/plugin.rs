@@ -81,13 +81,20 @@ impl Plugin {
         };
         return Ok(to_return);
     }
+
+    pub fn parse_log_string(&self, log_str: &str) -> anyhow::Result<()> {
+        let parse_fn: Symbol<ParseLogString> =
+            unsafe { self.plugin_library.get(PLUGIN_PARSE_LOG_STRING_NAME)? };
+        unsafe { parse_fn(CString::new(log_str)?.into_raw()) }
+        Ok(())
+    }
 }
 
 pub async fn parse_plugin(plugin: Plugin, rcv: Receiver<String>) -> anyhow::Result<()> {
     let iter = rcv.iter();
     for s in iter {
         if plugin.is_log_parseable(&s)? {
-            println!("Parseable!");
+            plugin.parse_log_string(&s)?;
         } else {
             println!("Not Parseable");
         }

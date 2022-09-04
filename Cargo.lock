@@ -358,6 +358,7 @@ name = "parse_logs_v2"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "lazy_static",
  "libloading",
  "mockall",
  "notify",
