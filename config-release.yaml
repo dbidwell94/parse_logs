@@ -1,4 +1,3 @@
 plugins:
-- plugin_location: ./target/release/libnginx_plugin.so
-- plugin_location: ./target/release/libnginx_plugin.so
+- plugin_location: /home/dbidwell/Documents/PersonalDevelopment/example_plugin/target/release/libexample_plugin.so
 - plugin_location: ./target/release/libnginx_plugin.so

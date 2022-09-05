@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use chrono::{DateTime, Utc};
-use http::{Method, StatusCode, Version};
+use http::{Method, StatusCode};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::net::IpAddr;

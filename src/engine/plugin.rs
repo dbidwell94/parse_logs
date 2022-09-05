@@ -1,5 +1,5 @@
 use libloading::{Library, Symbol};
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, CString};
 use std::sync::mpsc::Receiver;
 use thiserror::Error;
 
@@ -19,15 +19,11 @@ const PLUGIN_CHECK_LOG_PARSEABLE: &[u8] = b"check_log_parseable";
 enum PluginError {
     #[error("Unable to load plugin at path {0}")]
     PluginLoadError(String),
-
-    #[error("Plugin located at {0} has an invalid signature")]
-    InvalidPluginError(String),
 }
 
 #[derive(Debug)]
 pub struct Plugin {
     plugin_name: String,
-    plugin_location: String,
     plugin_library: Library,
 }
 
@@ -49,7 +45,6 @@ impl Plugin {
         }
 
         Ok(Self {
-            plugin_location: plugin_location.to_owned(),
             plugin_name,
             plugin_library: lib,
         })

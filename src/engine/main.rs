@@ -46,14 +46,15 @@ impl Engine {
     }
 
     pub async fn start_parse(mut self) -> anyhow::Result<()> {
-        let mut handles: Vec<JoinHandle<()>> = Vec::new();
+        let mut handles: Vec<JoinHandle<anyhow::Result<()>>> = Vec::new();
         for (_, mut value_option) in self.plugins {
             let value = value_option.take();
             if let Some(plugin) = value {
                 let (sx, rx): (StdSender<String>, StdReceiver<String>) = std_channel();
                 self.log_senders.insert(plugin.get_log_path()?, Some(sx));
                 handles.push(tokio::spawn(async move {
-                    parse_plugin(plugin, rx).await;
+                    parse_plugin(plugin, rx).await?;
+                    Ok(())
                 }));
             }
         }
@@ -69,40 +70,40 @@ impl Engine {
                     let mut previous_size = file.metadata()?.len();
                     file.seek(SeekFrom::Start(previous_size))?;
                     let mut buffer = [0u8; 1024 * 1024];
-                    loop {
-                        for res in rx.iter() {
-                            match res {
-                                Ok(output) => match output.kind {
-                                    notify::EventKind::Modify(ty) => match ty {
-                                        notify::event::ModifyKind::Data(_) => {
-                                            let current_size = file.metadata()?.len();
-                                            let delta_size =
-                                                (current_size as i64) - (previous_size as i64);
-                                            if delta_size < 1 {
-                                                continue;
-                                            }
-                                            let read_bytes = file.read(&mut buffer)? as i64;
-                                            if read_bytes != delta_size {
-                                                panic!("Something went wrong, read wrong amount of bytes");
-                                            }
-                                            let string = std::str::from_utf8(&buffer[0..(read_bytes as usize)])?;
-                                            previous_size = current_size;
-                                            file.seek(SeekFrom::Start(previous_size))?;
-                                            sender.send(string.to_owned())?;
+                    for res in rx.iter() {
+                        println!("{:?}", &res);
+                        match res {
+                            Ok(output) => match output.kind {
+                                notify::EventKind::Modify(ty) => match ty {
+                                    notify::event::ModifyKind::Data(_) => {
+                                        let current_size = file.metadata()?.len();
+                                        let delta_size =
+                                            (current_size as i64) - (previous_size as i64);
+                                        if delta_size < 1 {
+                                            continue;
                                         }
-                                        _ => {
+                                        let read_bytes = file.read(&mut buffer)? as i64;
+                                        if read_bytes != delta_size {
+                                            panic!(
+                                                "Something went wrong, read wrong amount of bytes"
+                                            );
                                         }
-                                    },
-                                    notify::EventKind::Remove(rm) => match rm {
-                                        notify::event::RemoveKind::File => {}
-                                        _ => {}
-                                    },
-                                    _ => {
+                                        let string =
+                                            std::str::from_utf8(&buffer[0..(read_bytes as usize)])?;
+                                        previous_size = current_size;
+                                        file.seek(SeekFrom::Start(previous_size))?;
+                                        sender.send(string.to_owned())?;
                                     }
+                                    _ => {}
                                 },
-                                Err(e) => {
-                                    println!("Error!: {:?}", e);
-                                }
+                                notify::EventKind::Remove(rm) => match rm {
+                                    notify::event::RemoveKind::File => {}
+                                    _ => {}
+                                },
+                                _ => {}
+                            },
+                            Err(e) => {
+                                println!("Error!: {:?}", e);
                             }
                         }
                     }
