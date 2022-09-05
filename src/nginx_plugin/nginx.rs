@@ -12,7 +12,7 @@ lazy_static! {
 }
 
 #[derive(Error, Debug)]
-enum NginxError {
+pub enum NginxError {
     #[error("Unable to parse log")]
     LogParseError,
 }

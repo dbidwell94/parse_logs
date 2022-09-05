@@ -69,9 +69,8 @@ impl Engine {
                     let mut file = OpenOptions::new().read(true).open(&log_path)?;
                     let mut previous_size = file.metadata()?.len();
                     file.seek(SeekFrom::Start(previous_size))?;
-                    let mut buffer = [0u8; 1024 * 1024];
+
                     for res in rx.iter() {
-                        println!("{:?}", &res);
                         match res {
                             Ok(output) => match output.kind {
                                 notify::EventKind::Modify(ty) => match ty {
@@ -82,14 +81,12 @@ impl Engine {
                                         if delta_size < 1 {
                                             continue;
                                         }
-                                        let read_bytes = file.read(&mut buffer)? as i64;
-                                        if read_bytes != delta_size {
-                                            panic!(
-                                                "Something went wrong, read wrong amount of bytes"
-                                            );
-                                        }
+                                        let mut buffer: Vec<u8> = vec![0u8; delta_size as usize];
+
+                                        file.read_exact(&mut buffer[0..delta_size as usize])?;
+
                                         let string =
-                                            std::str::from_utf8(&buffer[0..(read_bytes as usize)])?;
+                                            std::str::from_utf8(&buffer[0..(delta_size as usize)])?;
                                         previous_size = current_size;
                                         file.seek(SeekFrom::Start(previous_size))?;
                                         sender.send(string.to_owned())?;
@@ -97,7 +94,14 @@ impl Engine {
                                     _ => {}
                                 },
                                 notify::EventKind::Remove(rm) => match rm {
-                                    notify::event::RemoveKind::File => {}
+                                    notify::event::RemoveKind::File => {
+                                        if output
+                                            .paths
+                                            .contains(&Path::new(&log_path).to_path_buf())
+                                        {
+                                            break;
+                                        }
+                                    }
                                     _ => {}
                                 },
                                 _ => {}
