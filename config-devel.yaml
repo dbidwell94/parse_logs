@@ -1,2 +1,0 @@
-plugins:
-- plugin_location: ./target/debug/libnginx_plugin.so

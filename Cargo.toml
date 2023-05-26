@@ -1,7 +1,9 @@
 [package]
-name = "parse_logs_v2"
+name = "ff2b"
 version = "0.1.0"
 edition = "2021"
+authors = ["Devin Bidwell <dbidwell94@biddydev.com>"]
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,23 +13,16 @@ opt-level = 3
 panic = "unwind"
 
 [[bin]]
-name = "parse_engine"
+name = "ff2b"
 path = "src/engine/main.rs"
 
-[lib]
-name = "nginx_plugin"
-path = "src/nginx_plugin/lib.rs"
-crate-type = ["cdylib"]
-
 [dependencies]
-libloading = {version = "0.7"}
-anyhow = {version = "1.0.63"}
-thiserror = {version = "1.0.33"}
-serde = {version = "1.0.144", features = ["derive"]}
-serde_yaml = {version = "0.9.10"}
-notify = {version = "5.0.0"}
-regex = {version = "1.6.0"}
-tokio = {version = "1.20.1", features = ["full"]}
-lazy_static = {version = "1.4.0"}
-chrono = {version = "0.4.22"}
-http = {version = "0.2.8"}
+anyhow = { version = "1.0.71" }
+thiserror = { version = "1.0.40" }
+serde = { version = "1.0.163", features = ["derive"] }
+serde_yaml = { version = "0.9.21" }
+notify = { version = "6.0.0" }
+regex = { version = "1.8.3" }
+tokio = { version = "1.28.1", features = ["full"] }
+lazy_static = { version = "1.4.0" }
+clap = { version = "4.3.0", features = ["derive"] }

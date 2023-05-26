@@ -1,193 +1,135 @@
 mod config;
-mod plugin;
-
-use crate::plugin::parse_plugin;
-use crate::{config::Config, plugin::Plugin};
-use anyhow::Result as AnyhowResult;
-use notify::{
-    event::Event, INotifyWatcher, RecommendedWatcher, RecursiveMode, Result as NotifyResult,
-    Watcher,
-};
+mod man;
+use anyhow::{anyhow, Result as AnyhowResult};
+use clap::Parser;
+use config::{CompiledConfig, Config};
+use man::Args;
+use notify::event::ModifyKind;
+use notify::{RecommendedWatcher, Watcher};
 use std::collections::HashMap;
 use std::fs::OpenOptions;
-use std::io::{Read, Seek, SeekFrom};
-use std::path::Path;
-use std::sync::mpsc::{channel as std_channel, Receiver as StdReceiver, Sender as StdSender};
-use tokio::task::JoinHandle;
+use std::io::{BufReader, Read, Seek};
+use std::path::{Path, PathBuf};
+
+pub fn parse_err(e: Box<dyn std::error::Error + Send + Sync>) -> anyhow::Error {
+    anyhow!(e)
+}
 
 struct Engine {
-    plugins: HashMap<String, Option<Plugin>>,
-    log_senders: HashMap<String, Option<StdSender<String>>>,
-    config: Config,
+    config: HashMap<PathBuf, (CompiledConfig, usize)>,
+    buffer: [u8; 10 * 1000],
 }
 
 impl Engine {
-    pub fn new(config: Config) -> Self {
-        let mut to_return = Self {
-            plugins: HashMap::new(),
-            config: config.clone(),
-            log_senders: HashMap::new(),
+    pub fn new(config: Config) -> AnyhowResult<Self> {
+        let mut config_map: HashMap<PathBuf, (CompiledConfig, usize)> = HashMap::new();
+        for conf in config.0 {
+            let cc = CompiledConfig::try_from(conf).map_err(parse_err)?;
+
+            let oo = OpenOptions::new()
+                .read(true)
+                .open(&cc.log_location)
+                .map_err(|e| anyhow!(e))?;
+
+            let file_size = oo.metadata().map_err(|e| anyhow!(e))?.len();
+
+            config_map.insert(cc.log_location.clone(), (cc, file_size as usize));
+        }
+
+        let to_return = Self {
+            config: config_map,
+            buffer: [0u8; 10 * 1000],
         };
 
-        for plugin_info in config.get_plugins() {
-            to_return
-                .add_plugin(&plugin_info.plugin_location)
-                .expect("Unable to load plugin");
-        }
-
-        return to_return;
+        return Ok(to_return);
     }
 
-    pub fn add_plugin(&mut self, location: &str) -> anyhow::Result<()> {
-        let plugin = Plugin::new(location)?;
-        let plugin_name = plugin.get_plugin_name();
-        self.plugins.insert(plugin_name.to_owned(), Some(plugin));
-        Ok(())
-    }
-
-    pub async fn start_parse(mut self) -> anyhow::Result<()> {
-        let mut handles: Vec<JoinHandle<anyhow::Result<()>>> = Vec::new();
-        for (_, mut value_option) in self.plugins {
-            let value = value_option.take();
-            if let Some(plugin) = value {
-                let (sx, rx): (StdSender<String>, StdReceiver<String>) = std_channel();
-                self.log_senders.insert(plugin.get_log_path()?, Some(sx));
-                handles.push(tokio::spawn(async move {
-                    parse_plugin(plugin, rx).await?;
-                    Ok(())
-                }));
-            }
+    pub async fn begin_watching(&mut self) -> AnyhowResult<()> {
+        let (sx, mut rx) = tokio::sync::mpsc::channel(100);
+        if self.config.len() < 1 {
+            return Ok(());
         }
-        let mut send_threads: Vec<JoinHandle<anyhow::Result<()>>> = Vec::new();
-        for (log_path, mut sender_option) in self.log_senders {
-            let sender_option = sender_option.take();
-            if let Some(sx) = sender_option {
-                send_threads.push(tokio::spawn(async move {
-                    let sender = sx.clone();
-                    let (rx, mut watcher) = create_watcher()?;
-                    watcher.watch(Path::new(&log_path), RecursiveMode::NonRecursive)?;
-                    let mut file = OpenOptions::new().read(true).open(&log_path)?;
-                    let mut previous_size = file.metadata()?.len();
-                    file.seek(SeekFrom::Start(previous_size))?;
+        let mut watcher = RecommendedWatcher::new(
+            move |e| {
+                let _ = sx.blocking_send(e);
+            },
+            notify::Config::default(),
+        )
+        .map_err(|e| anyhow!(e))?;
 
-                    for res in rx.iter() {
-                        match res {
-                            Ok(output) => match output.kind {
-                                notify::EventKind::Modify(ty) => match ty {
-                                    notify::event::ModifyKind::Data(_) => {
-                                        let current_size = file.metadata()?.len();
-                                        let delta_size =
-                                            (current_size as i64) - (previous_size as i64);
-                                        if delta_size < 1 {
-                                            continue;
-                                        }
-                                        let mut buffer: Vec<u8> = vec![0u8; delta_size as usize];
+        for (_, (config, _)) in &self.config {
+            watcher
+                .watch(
+                    Path::new(&config.log_location),
+                    notify::RecursiveMode::NonRecursive,
+                )
+                .map_err(|e| anyhow!(e))?;
+        }
 
-                                        file.read_exact(&mut buffer[0..delta_size as usize])?;
-
-                                        let string =
-                                            std::str::from_utf8(&buffer[0..(delta_size as usize)])?;
-                                        previous_size = current_size;
-                                        file.seek(SeekFrom::Start(previous_size))?;
-                                        sender.send(string.to_owned())?;
-                                    }
-                                    _ => {}
-                                },
-                                notify::EventKind::Remove(rm) => match rm {
-                                    notify::event::RemoveKind::File => {
-                                        if output
-                                            .paths
-                                            .contains(&Path::new(&log_path).to_path_buf())
-                                        {
-                                            break;
-                                        }
-                                    }
-                                    _ => {}
-                                },
-                                _ => {}
-                            },
-                            Err(e) => {
-                                println!("Error!: {:?}", e);
-                            }
-                        }
+        while let Some(evt) = rx.recv().await {
+            let evt = evt.map_err(|e| anyhow!(e))?;
+            for path in &evt.paths {
+                if let Some((found_config, location)) = self.config.get_mut(path) {
+                    if let Err(e) =
+                        Self::parse_log_event(evt, found_config, location, &mut self.buffer).await
+                    {
+                        println!("Error: {e}");
                     }
-
-                    return Ok(());
-                }));
-            } else {
+                    break;
+                }
             }
-        }
-
-        for thread in send_threads {
-            thread.await??;
         }
 
         Ok(())
     }
-}
 
-impl Default for Engine {
-    fn default() -> Self {
-        let config = config::get_or_create_config(None).expect("Unable to get or create config");
-        let plugins = HashMap::<String, Option<Plugin>>::new();
-
-        let mut to_return = Self {
-            plugins,
-            config,
-            log_senders: HashMap::new(),
-        };
-        for plugin_info in to_return.config.get_plugins().clone() {
-            to_return
-                .add_plugin(&plugin_info.plugin_location)
-                .expect("Unable to load plugin");
+    async fn parse_log_event(
+        evt: notify::Event,
+        config: &CompiledConfig,
+        previous_pos: &mut usize,
+        buffer: &mut [u8],
+    ) -> AnyhowResult<()> {
+        if let notify::EventKind::Remove(_) = evt.kind {
+            return Ok(());
         }
+        let oo = OpenOptions::new()
+            .read(true)
+            .open(&config.log_location)
+            .map_err(|e| anyhow!(e))?;
+        let mut reader = BufReader::new(oo);
 
-        return to_return;
-    }
-}
+        if let notify::EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Any)) =
+            evt.kind
+        {
+            reader
+                .seek(std::io::SeekFrom::Start(*previous_pos as u64))
+                .map_err(|e| anyhow!(e))?;
 
-type CreateWatcherReturn = (StdReceiver<NotifyResult<Event>>, INotifyWatcher);
+            let amt = reader.read(buffer).map_err(|e| anyhow!(e))?;
 
-fn create_watcher() -> AnyhowResult<CreateWatcherReturn> {
-    let (tx, rx) = std::sync::mpsc::channel();
+            *previous_pos += amt;
+            let buff_slice = (&buffer[..amt]).to_vec();
+            let str = String::from_utf8(buff_slice).map_err(|e| anyhow!(e))?;
+            
 
-    let watcher = RecommendedWatcher::new(tx, notify::Config::default())?;
-
-    Ok((rx, watcher))
-}
-
-struct ProgramArgs {
-    config_location: Option<String>,
-}
-
-impl ProgramArgs {
-    fn new(args: Vec<String>) -> Self {
-        let mut config_location: Option<String> = None;
-        for (index, arg) in args.iter().enumerate() {
-            if arg.to_lowercase() == "-c" {
-                config_location = Some(
-                    args.get(index + 1)
-                        .expect("Invalid parameter: -c")
-                        .to_owned(),
-                );
+            if config.parse_regex.is_match(&str) {
+                println!("Found matching log for {0:?}", config.title);
             }
         }
 
-        Self { config_location }
+        Ok(())
     }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args = ProgramArgs::new(std::env::args().collect());
-    let config_location = args
-        .config_location
-        .unwrap_or("./config-devel.yaml".to_owned());
+    let args = Args::parse();
 
-    println!("Using config located at {}", &config_location);
+    let oo = OpenOptions::new().read(true).open(args.config_path);
+    let config = Config::try_from(oo).map_err(parse_err)?;
 
-    let engine = Engine::new(config::get_or_create_config(Some(&config_location))?);
-    engine.start_parse().await?;
+    let mut engine = Engine::new(config)?;
+    engine.begin_watching().await?;
 
     return Ok(());
 }

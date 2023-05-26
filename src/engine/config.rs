@@ -1,69 +1,68 @@
-use anyhow::anyhow;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::fs::OpenOptions;
-use std::io::{BufReader, BufWriter, Write};
-use std::path::Path;
-use thiserror::Error;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
 
-const DEFAULT_CONFIG_LOCATION: &str = "/etc/parse_logs/config.yaml";
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Config(pub Vec<LogConfig>);
 
-#[derive(Error, Debug, Clone)]
-enum ConfigError {
-    #[error("The config file already exists at {0} ")]
-    FileExists(String),
-}
+impl TryFrom<std::io::Result<File>> for Config {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Config {
-    plugins: Vec<PluginInfo>,
-}
+    fn try_from(file: std::io::Result<File>) -> Result<Self, Self::Error> {
+        let file = file.map_err(Box::new)?;
+        let reader = BufReader::new(file);
+        let config =
+            serde_yaml::from_reader::<BufReader<File>, Config>(reader).map_err(Box::new)?;
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct PluginInfo {
-    pub plugin_location: String,
-}
-
-impl Config {
-    pub fn get_plugins(&self) -> &Vec<PluginInfo> {
-        return &self.plugins;
+        Ok(config)
     }
 }
 
-pub fn generate_default_config(config_file_location_option: Option<&str>) -> anyhow::Result<()> {
-    let config_file_location = config_file_location_option.unwrap_or(DEFAULT_CONFIG_LOCATION);
-    let config = Config {
-        plugins: vec![PluginInfo {
-            plugin_location: String::from("/etc/parse_logs/example_library.so"),
-        }],
-    };
-
-    let path = Path::new(config_file_location);
-    if path.exists() {
-        return Err(anyhow!(ConfigError::FileExists(
-            config_file_location.to_owned()
-        )));
-    }
-
-    let to_write = serde_yaml::to_string(&config)?;
-    let file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open(config_file_location)?;
-
-    let mut writer = BufWriter::new(file);
-    writer.write(to_write.as_bytes())?;
-
-    Ok(())
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogConfig {
+    pub log_location: String,
+    pub parse_regex: String,
+    pub host_regex: String,
+    pub title: String,
 }
 
-pub fn get_or_create_config(config_file_location_option: Option<&str>) -> anyhow::Result<Config> {
-    let config_file_location = config_file_location_option.unwrap_or(DEFAULT_CONFIG_LOCATION);
+#[derive(Debug)]
+pub struct CompiledConfig {
+    pub log_location: PathBuf,
+    pub parse_regex: Regex,
+    pub host_regex: Regex,
+    pub title: String,
+}
 
-    if !Path::new(config_file_location).exists() {
-        generate_default_config(Some(config_file_location))?;
-    };
-    let file = OpenOptions::new().read(true).open(config_file_location)?;
-    let config: Config = serde_yaml::from_reader(BufReader::new(file))?;
+impl std::hash::Hash for CompiledConfig {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.log_location.hash(state);
+        self.title.hash(state);
+    }
+}
 
-    Ok(config)
+impl PartialEq for CompiledConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.log_location == other.log_location && self.title == other.title
+    }
+}
+
+impl TryFrom<LogConfig> for CompiledConfig {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(value: LogConfig) -> Result<Self, Self::Error> {
+        let regex = Regex::new(&value.parse_regex).map_err(Box::new)?;
+        let path = std::fs::canonicalize(Path::new(&value.log_location)).map_err(Box::new)?;
+        let host_regex = Regex::new(&value.host_regex).map_err(Box::new)?;
+
+        Ok(Self {
+            host_regex,
+            log_location: path,
+            parse_regex: regex,
+            title: value.title,
+        })
+    }
 }
