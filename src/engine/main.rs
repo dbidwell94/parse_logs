@@ -108,8 +108,8 @@ impl Engine {
             let amt = reader.read(buffer).map_err(|e| anyhow!(e))?;
 
             *previous_pos += amt;
-            let buff_slice = (&buffer[..amt]).to_vec();
-            let str = String::from_utf8(buff_slice).map_err(|e| anyhow!(e))?;
+            let buff_slice = &buffer[..amt];
+            let str = std::str::from_utf8(buff_slice).map_err(|e| anyhow!(e))?;
 
             // if config.parse_regex.is_match(&str) {
             //     println!("Found matching log for {0:?}", config.title);
