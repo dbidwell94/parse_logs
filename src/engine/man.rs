@@ -12,4 +12,8 @@ pub struct Args {
     /// Location of the config path used to tell ff2b where log files are
     /// and how to parse the logs
     pub config_path: String,
+    #[arg(short, long, default_value = "false")]
+    /// Performs a dry startup in order to test the parsing of the requested configuration.
+    /// May be used in conjunction with `-c`.
+    pub test_config: bool,
 }

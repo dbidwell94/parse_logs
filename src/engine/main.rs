@@ -110,11 +110,10 @@ impl Engine {
             *previous_pos += amt;
             let buff_slice = (&buffer[..amt]).to_vec();
             let str = String::from_utf8(buff_slice).map_err(|e| anyhow!(e))?;
-            
 
-            if config.parse_regex.is_match(&str) {
-                println!("Found matching log for {0:?}", config.title);
-            }
+            // if config.parse_regex.is_match(&str) {
+            //     println!("Found matching log for {0:?}", config.title);
+            // }
         }
 
         Ok(())
@@ -129,7 +128,9 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::try_from(oo).map_err(parse_err)?;
 
     let mut engine = Engine::new(config)?;
-    engine.begin_watching().await?;
+    if !args.test_config {
+        engine.begin_watching().await?;
+    }
 
     return Ok(());
 }
